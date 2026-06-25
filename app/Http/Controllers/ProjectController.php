@@ -2,25 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreProjectRequest;
+use App\Http\Requests\UpdateProjectRequest;
+use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class ProjectController extends Controller
 {
     /**
-     * List all projects.
+     * List all projects (paginated).
      *
      * GET /api/projects  [Admin only]
      */
     public function index(): JsonResponse
     {
-        $projects = Project::withCount('tasks')->latest()->get();
+        $projects = Project::withCount('tasks')
+            ->latest()
+            ->paginate(15);
 
         return response()->json([
             'success' => true,
             'message' => 'Projects retrieved successfully.',
-            'data'    => $projects,
+            'data'    => ProjectResource::collection($projects),
+            'meta'    => [
+                'current_page' => $projects->currentPage(),
+                'last_page'    => $projects->lastPage(),
+                'per_page'     => $projects->perPage(),
+                'total'        => $projects->total(),
+            ],
         ]);
     }
 
@@ -29,72 +39,40 @@ class ProjectController extends Controller
      *
      * POST /api/projects  [Admin only]
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreProjectRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name'        => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'status'      => 'sometimes|in:active,completed',
-        ]);
-
-        $project = Project::create($validated);
+        $project = Project::create($request->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Project created successfully.',
-            'data'    => $project,
+            'data'    => new ProjectResource($project),
         ], 201);
     }
 
     /**
      * Update an existing project.
      *
-     * PUT /api/projects/{id}  [Admin only]
+     * PUT /api/projects/{project}  [Admin only]
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateProjectRequest $request, Project $project): JsonResponse
     {
-        $project = Project::find($id);
-
-        if (! $project) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Project not found.',
-                'data'    => null,
-            ], 404);
-        }
-
-        $validated = $request->validate([
-            'name'        => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
-            'status'      => 'sometimes|in:active,completed',
-        ]);
-
-        $project->update($validated);
+        $project->update($request->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Project updated successfully.',
-            'data'    => $project->fresh(),
+            'data'    => new ProjectResource($project->fresh()),
         ]);
     }
 
     /**
      * Delete a project.
      *
-     * DELETE /api/projects/{id}  [Admin only]
+     * DELETE /api/projects/{project}  [Admin only]
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(Project $project): JsonResponse
     {
-        $project = Project::find($id);
-
-        if (! $project) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Project not found.',
-                'data'    => null,
-            ], 404);
-        }
-
         $project->delete();
 
         return response()->json([

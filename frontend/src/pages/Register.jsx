@@ -4,21 +4,36 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 
-const Login = () => {
-  const { login, isLoading } = useAuth();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+const Register = () => {
+  const { register, isLoading } = useAuth();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+  });
   const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
 
-    if (!formData.email || !formData.password) {
-      setError('Email and password are required');
+    if (!formData.name || !formData.email || !formData.password) {
+      setError('All fields are required');
       return;
     }
 
-    const result = await login(formData.email, formData.password);
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (formData.password !== formData.password_confirmation) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    const result = await register(formData);
     if (!result.success) {
       setError(result.message);
     }
@@ -34,11 +49,21 @@ const Login = () => {
       <div className="auth-card">
         <div className="auth-brand">
           <div className="brand-icon">L</div>
-          <h1>Welcome back</h1>
-          <p>Sign in to your Lohya account</p>
+          <h1>Create an account</h1>
+          <p>Get started with Lohya</p>
         </div>
 
         <form onSubmit={handleSubmit}>
+          <Input
+            label="Full Name"
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="John Doe"
+            disabled={isLoading}
+          />
+
           <Input
             label="Email Address"
             type="email"
@@ -55,7 +80,18 @@ const Login = () => {
             name="password"
             value={formData.password}
             onChange={handleChange}
-            placeholder="Enter your password"
+            placeholder="Min. 8 characters"
+            hint="Must be at least 8 characters"
+            disabled={isLoading}
+          />
+
+          <Input
+            label="Confirm Password"
+            type="password"
+            name="password_confirmation"
+            value={formData.password_confirmation}
+            onChange={handleChange}
+            placeholder="Repeat your password"
             disabled={isLoading}
           />
 
@@ -71,16 +107,16 @@ const Login = () => {
             className="w-full mt-3"
             disabled={isLoading}
           >
-            {isLoading ? 'Signing in...' : 'Sign In'}
+            {isLoading ? 'Creating account...' : 'Create Account'}
           </Button>
         </form>
 
         <div className="auth-footer">
-          Don't have an account? <Link to="/register">Create one</Link>
+          Already have an account? <Link to="/login">Sign in</Link>
         </div>
       </div>
     </div>
   );
 };
 
-export default Login;
+export default Register;

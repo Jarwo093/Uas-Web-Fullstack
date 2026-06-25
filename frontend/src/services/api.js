@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// Laravel default port is 8000
-const API_URL = 'http://127.0.0.1:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -33,7 +32,7 @@ api.interceptors.response.use(
       // Clear token and user data
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
-      
+
       // Redirect to login if not already there
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';

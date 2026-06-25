@@ -19,7 +19,10 @@ class Task extends Model
         'project_id',
         'user_id',
         'title',
+        'description',
         'status',
+        'priority',
+        'due_date',
     ];
 
     /**
@@ -30,7 +33,9 @@ class Task extends Model
     protected function casts(): array
     {
         return [
-            'status' => 'string',
+            'status'   => 'string',
+            'priority' => 'string',
+            'due_date' => 'date',
         ];
     }
 

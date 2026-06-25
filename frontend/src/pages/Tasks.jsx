@@ -1,201 +1,189 @@
-import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { useTasks } from '../hooks/useTasks';
+import { useProjects } from '../hooks/useProjects';
+import { useUsers } from '../hooks/useUsers';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Badge } from '../components/ui/Badge';
-import { Plus, CheckCircle, Clock, Circle } from 'lucide-react';
+import { Pagination } from '../components/ui/Pagination';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonRow } from '../components/ui/Skeleton';
+import { TaskCard } from '../components/tasks/TaskCard';
+import { TaskForm } from '../components/tasks/TaskForm';
+import { TaskDetailModal } from '../components/tasks/TaskDetailModal';
+import { TaskFilters } from '../components/tasks/TaskFilters';
+import { Plus, CheckSquare } from 'lucide-react';
 
 const Tasks = () => {
   const { isAdmin, user: authUser } = useAuth();
-  const [tasks, setTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]); // Real app would have a GET /api/users endpoint
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Form State
+  const toast = useToast();
+  const {
+    tasks, meta, isLoading, error,
+    filters, updateFilter, resetFilters,
+    createTask, updateTask, deleteTask, updateTaskStatus,
+  } = useTasks();
+
+  // Call hooks unconditionally, using the enabled flag
+  const { projects } = useProjects({ enabled: isAdmin });
+  const { users } = useUsers({ enabled: isAdmin });
+
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ project_id: '', user_id: '', title: '', status: 'todo' });
+  const [editingTask, setEditingTask] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
 
-  const fetchTasks = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.get('/tasks');
-      if (response.data.success) {
-        setTasks(response.data.data);
-      }
-      
-      // If admin, fetch projects to populate dropdowns
-      // Note: A real app would need a user list endpoint to populate 'user_id', 
-      // but we will mock a few or use hardcoded IDs for the sake of the boilerplate if no endpoint exists.
-      // Assuming GET /api/projects exists
-      if (isAdmin) {
-        const projRes = await api.get('/projects');
-        if (projRes.data.success) {
-          setProjects(projRes.data.data);
-          if (projRes.data.data.length > 0) {
-             setFormData(prev => ({...prev, project_id: projRes.data.data[0].id}));
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch data', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTasks();
-  }, [isAdmin]);
-
-  const handleStatusChange = async (taskId, newStatus) => {
-    try {
-      const response = await api.put(`/tasks/${taskId}/status`, { status: newStatus });
-      if (response.data.success) {
-        setTasks(prev => prev.map(t => t.id === taskId ? response.data.data : t));
-      }
-    } catch (error) {
-      console.error('Failed to update status', error);
-    }
-  };
-
-  const handleCreateTask = async (e) => {
-    e.preventDefault();
+  const handleCreateTask = async (formData) => {
     setIsSubmitting(true);
     try {
-      // Hardcoding user_id to 2 (Alice) as a fallback if no select is used
-      const payload = { ...formData, user_id: formData.user_id || 2 };
-      const response = await api.post('/tasks', payload);
-      if (response.data.success) {
-        setTasks(prev => [response.data.data, ...prev]);
-        setShowForm(false);
-        setFormData(prev => ({ ...prev, title: '', status: 'todo' }));
-      }
-    } catch (error) {
-      console.error('Failed to create task', error);
+      await createTask(formData);
+      toast.success('Task created', 'The task has been assigned successfully.');
+      setShowForm(false);
+    } catch (err) {
+      toast.error('Failed to create task', err.response?.data?.message || 'An error occurred.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'done': return <CheckCircle size={18} color="var(--success)" />;
-      case 'in_progress': return <Clock size={18} color="var(--attention)" />;
-      default: return <Circle size={18} color="var(--stone)" />;
+  const handleUpdateTask = async (formData) => {
+    setIsSubmitting(true);
+    try {
+      await updateTask(editingTask.id, formData);
+      toast.success('Task updated', 'The task has been updated successfully.');
+      setEditingTask(null);
+    } catch (err) {
+      toast.error('Failed to update task', err.response?.data?.message || 'An error occurred.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case 'done': return <Badge variant="success">Done</Badge>;
-      case 'in_progress': return <Badge variant="attention">In Progress</Badge>;
-      default: return <Badge variant="neutral">To Do</Badge>;
+  const handleDeleteTask = async (taskId) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      try {
+        await deleteTask(taskId);
+        toast.success('Task deleted', 'The task has been deleted successfully.');
+        setSelectedTask(null);
+      } catch (err) {
+        toast.error('Failed to delete task', err.response?.data?.message || 'An error occurred.');
+      }
+    }
+  };
+
+  const handleStatusChange = async (taskId, newStatus) => {
+    try {
+      await updateTaskStatus(taskId, newStatus);
+      toast.success('Status updated', `Task status changed to ${newStatus.replace('_', ' ')}.`);
+    } catch (err) {
+      toast.error('Update failed', err.response?.data?.message || 'Could not update task status.');
     }
   };
 
   return (
     <div>
-      <div className="page-header mb-xl">
+      <div className="page-header">
         <div>
-          <h1 className="text-heading-lg">Tasks</h1>
-          <p className="text-body-md">
+          <h1 className="page-title">Tasks</h1>
+          <p className="page-subtitle">
             {isAdmin ? 'Manage all tasks across the organization.' : 'Manage your assigned tasks.'}
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={() => setShowForm(!showForm)} className="flex items-center gap-xs">
-            <Plus size={18} />
+          <Button onClick={() => setShowForm(!showForm)}>
+            <Plus size={16} />
             {showForm ? 'Cancel' : 'New Task'}
           </Button>
         )}
       </div>
 
+      {/* Create Task Form (Admin only) */}
       {showForm && isAdmin && (
-        <div className="card-checkout-summary mb-xl">
-          <h2 className="text-heading-sm mb-md">Assign New Task</h2>
-          <form onSubmit={handleCreateTask}>
-            <div className="grid-cards">
-              <Input
-                label="Task Title"
-                value={formData.title}
-                onChange={e => setFormData({ ...formData, title: e.target.value })}
-                required
-              />
-              <div className="form-group">
-                <label className="form-label">Project</label>
-                <select 
-                  className="text-input"
-                  value={formData.project_id}
-                  onChange={e => setFormData({ ...formData, project_id: e.target.value })}
-                  required
-                >
-                  <option value="" disabled>Select Project</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div className="flex justify-end mt-md">
-              <Button type="submit" variant="buy-cta" disabled={isSubmitting}>
-                {isSubmitting ? 'Assigning...' : 'Assign Task'}
-              </Button>
-            </div>
-          </form>
+        <TaskForm
+          projects={projects}
+          users={users}
+          onSubmit={handleCreateTask}
+          onCancel={() => setShowForm(false)}
+          isSubmitting={isSubmitting}
+        />
+      )}
+
+      {/* Edit Task Form (Admin only) */}
+      {editingTask && isAdmin && (
+        <TaskForm
+          projects={projects}
+          users={users}
+          onSubmit={handleUpdateTask}
+          onCancel={() => setEditingTask(null)}
+          isSubmitting={isSubmitting}
+          initialData={editingTask}
+        />
+      )}
+
+      {/* Filters */}
+      <TaskFilters
+        filters={filters}
+        onFilterChange={updateFilter}
+        projects={isAdmin ? projects : []}
+        onReset={resetFilters}
+      />
+
+      {/* Error State */}
+      {error && (
+        <div className="card-flat text-center mb-5" style={{ padding: 'var(--space-6)', color: 'var(--danger)' }}>
+          {error}
         </div>
       )}
 
+      {/* Task List */}
       {isLoading ? (
-        <div className="text-body-md">Loading tasks...</div>
-      ) : (
-        <div className="flex flex-col gap-md">
+        <SkeletonRow count={5} />
+      ) : tasks.length > 0 ? (
+        <div className="list-stack">
           {tasks.map(task => (
-            <div key={task.id} className="card-icon-feature flex items-center justify-between">
-              <div className="flex items-center gap-lg">
-                {getStatusIcon(task.status)}
-                <div>
-                  <h3 className="text-subtitle-lg">{task.title}</h3>
-                  <div className="text-body-sm flex gap-sm mt-xs">
-                    <span style={{color: 'var(--primary)'}}>{task.project?.name}</span>
-                    <span>•</span>
-                    <span>Assigned to: {task.user?.name}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-md">
-                {getStatusBadge(task.status)}
-                
-                {/* Status Toggle Dropdown (only if owner or admin) */}
-                {(isAdmin || task.user_id === authUser.id) && (
-                  <select 
-                    className="button-pill-tab"
-                    style={{ outline: 'none', cursor: 'pointer' }}
-                    value={task.status}
-                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                  >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="done">Done</option>
-                  </select>
-                )}
-              </div>
-            </div>
+            <TaskCard
+              key={task.id}
+              task={task}
+              onClick={setSelectedTask}
+              onStatusChange={handleStatusChange}
+              canEdit={isAdmin || task.user_id === authUser?.id}
+            />
           ))}
-          
-          {tasks.length === 0 && (
-            <div className="card-product-feature text-center">
-              <CheckCircle size={48} color="var(--hairline)" className="mx-auto mb-md" />
-              <h3 className="text-heading-sm">No tasks found</h3>
-              <p className="text-body-md mt-sm">You're all caught up!</p>
-            </div>
-          )}
         </div>
+      ) : (
+        <EmptyState
+          icon={CheckSquare}
+          title="No tasks found"
+          description={
+            filters.search || filters.status || filters.priority || filters.project_id
+              ? "No tasks match your current filters. Try adjusting or clearing them."
+              : isAdmin
+                ? "No tasks have been created yet. Click 'New Task' to assign one."
+                : "You're all caught up! No tasks are assigned to you."
+          }
+          action={
+            (filters.search || filters.status || filters.priority || filters.project_id) ? (
+              <Button variant="secondary" onClick={resetFilters}>Clear Filters</Button>
+            ) : null
+          }
+        />
       )}
+
+      {/* Pagination */}
+      <Pagination meta={meta} onPageChange={(p) => updateFilter('page', p)} />
+
+      {/* Task Detail Modal */}
+      <TaskDetailModal
+        task={selectedTask}
+        isOpen={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        canEdit={isAdmin}
+        onEdit={(task) => {
+          setSelectedTask(null);
+          setEditingTask(task);
+          setShowForm(false);
+        }}
+        onDelete={handleDeleteTask}
+      />
     </div>
   );
 };

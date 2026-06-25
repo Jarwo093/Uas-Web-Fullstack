@@ -3,6 +3,7 @@ import React, { forwardRef } from 'react';
 export const Input = forwardRef(({
   label,
   error,
+  hint,
   className = '',
   ...props
 }, ref) => {
@@ -11,10 +12,11 @@ export const Input = forwardRef(({
       {label && <label className="form-label">{label}</label>}
       <input
         ref={ref}
-        className={`text-input ${error ? 'error' : ''}`}
+        className={`form-input ${error ? 'error' : ''}`}
         {...props}
       />
-      {error && <div className="input-error-message">{error}</div>}
+      {error && <div className="form-error">{error}</div>}
+      {hint && !error && <div className="form-hint">{hint}</div>}
     </div>
   );
 });
