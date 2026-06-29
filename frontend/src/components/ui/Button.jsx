@@ -3,12 +3,14 @@ import React from 'react';
 export const Button = ({
   children,
   variant = 'primary',
+  size = '',
   className = '',
   ...props
 }) => {
-  const baseClass = `button-${variant}`;
+  const variantClass = `btn-${variant}`;
+  const sizeClass = size ? `btn-${size}` : '';
   return (
-    <button className={`${baseClass} ${className}`} {...props}>
+    <button className={`btn ${variantClass} ${sizeClass} ${className}`} {...props}>
       {children}
     </button>
   );
